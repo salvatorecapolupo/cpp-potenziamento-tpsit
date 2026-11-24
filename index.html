@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Da decimale a binario — percorso guidato</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f8fafc; --text:#0f172a; --muted:#64748b;
+    --accent:#2563eb; --accent-dark:#1d4ed8; --accent-bg:#dbeafe;
+    --ok:#15803d; --ok-bg:#dcfce7;
+    --err:#dc2626; --err-bg:#fee2e2;
+    --hl:#fde047; --hl-border:#ca8a04;
+    --border:#cbd5e1;
+    --code-bg:#0f172a; --code-text:#e2e8f0;
+    --code-kw:#7dd3fc; --code-num:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html{font-size:16px}
+  body{
+    margin:0; height:100vh; height:100dvh; overflow:hidden;
+    display:grid; grid-template-rows:auto minmax(0,1fr);
+    line-height:1.45;
+    font-family:'Atkinson Hyperlegible','Segoe UI',system-ui,sans-serif;
+    background:var(--bg); color:var(--text);
+  }
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+  }
+
+  /* ---------- intestazione ---------- */
+  header{
+    position:relative; display:flex; align-items:center; gap:14px;
+    padding:10px 20px 12px; background:var(--panel);
+    border-bottom:2px solid var(--border);
+  }
+  header h1{font-size:1.1rem; margin:0; flex:1}
+  header h1 span{color:var(--muted); font-weight:400}
+  .step-counter{
+    background:var(--accent); color:#fff; padding:4px 14px;
+    border-radius:20px; font-weight:700; font-size:.95rem; white-space:nowrap;
+  }
+  .progress{position:absolute; left:0; right:0; bottom:-2px; height:4px}
+  .progress-fill{height:100%; width:0; background:var(--accent); transition:width .3s ease}
+
+  /* ---------- layout a una schermata ---------- */
+  main{
+    display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);
+    gap:14px; padding:14px 20px; min-height:0;
+    width:100%; max-width:1400px; margin:0 auto;
+  }
+  .left{display:flex; flex-direction:column; gap:12px; min-height:0}
+  .panel{
+    background:var(--panel); border:2px solid var(--border);
+    border-radius:12px; padding:12px 14px; min-height:0;
+  }
+  .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px}
+  .panel h2{font-size:.95rem; margin:0; color:var(--text)}
+  .hint{font-size:.8rem; color:var(--muted)}
+
+  .code-panel{flex:1 1 0; display:flex; flex-direction:column}
+  pre.code{
+    flex:1; min-height:0; overflow:auto; margin:0; padding:8px 14px;
+    background:var(--code-bg); color:var(--code-text); border-radius:8px;
+    font-family:'JetBrains Mono','Consolas',monospace;
+    font-size:clamp(13px,2.1vh,20px); line-height:1.5; white-space:pre;
+  }
+  .line{
+    display:block; padding:1px 14px; margin:0 -14px;
+    border-left:4px solid transparent;
+    transition:background .2s,border-color .2s;
+  }
+  .line.current{background:var(--hl); border-left-color:var(--hl-border); color:#000; font-weight:700}
+  .line.current .code-kw{color:#1e40af}
+  .line.current .code-num{color:#b45309}
+  .line.placeholder{color:#94a3b8; font-style:italic}
+  .code-kw{color:var(--code-kw)}
+  .code-num{color:var(--code-num)}
+  .help-token{cursor:help; border-bottom:2px dotted currentColor}
+
+  #tip{
+    position:fixed; z-index:50; max-width:260px; padding:8px 12px;
+    background:#1e293b; color:#fff; border-radius:6px; pointer-events:none;
+    font:13px/1.4 system-ui,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,.25);
+  }
+
+  /* ---------- memoria ---------- */
+  .mem-grid{display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:10px}
+  .tile{
+    display:flex; align-items:center; gap:8px; min-width:0;
+    background:#fff; border:2px solid var(--border); border-radius:8px; padding:6px 10px;
+  }
+  .var-name{font-family:monospace; font-weight:700; color:var(--accent); font-size:1.05rem}
+  .var-value{
+    font-family:monospace; font-weight:700; font-size:1.05rem;
+    min-width:44px; padding:2px 10px; text-align:center;
+    background:var(--accent-bg); color:var(--accent); border-radius:6px;
+  }
+  .var-value.empty{background:#f1f5f9; color:#94a3b8; font-weight:400}
+  .var-value.updated,.cell.updated{animation:flash .8s ease}
+  @keyframes flash{0%,100%{background:var(--accent-bg)} 50%{background:var(--hl)}}
+  .output-box{
+    flex:1; min-width:0; min-height:34px; display:flex; align-items:center;
+    background:var(--code-bg); color:#86efac; border-radius:6px; padding:2px 12px;
+    font-family:monospace; font-size:1.25rem; letter-spacing:4px; overflow:hidden;
+  }
+  .output-box:empty::before{content:'(vuoto)'; color:#64748b; letter-spacing:normal; font-style:italic; font-size:.85rem}
+  .arr{display:flex; align-items:center; gap:10px; margin-top:8px}
+  .arr small{color:var(--muted)}
+  .array-cells{display:flex; gap:6px; align-items:flex-start}
+  .cell-wrap{display:flex; flex-direction:column; align-items:center; gap:1px}
+  .cell{
+    width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--border); border-radius:6px; background:#fff;
+    font-family:monospace; font-size:15px; font-weight:700;
+  }
+  .cell.filled{background:var(--accent-bg); border-color:var(--accent); color:var(--accent)}
+  .cell-idx{font-size:10px; color:var(--muted); font-family:monospace}
+  .arr-none{font-style:italic; color:#94a3b8; font-size:.9rem}
+
+  /* ---------- pannello interazione ---------- */
+  .interact{display:flex; flex-direction:column; padding:18px 20px; background:#fff}
+  .view{display:flex; flex-direction:column; flex:1; min-height:0; gap:12px}
+  .q-title{font-size:clamp(1.05rem,2.6vh,1.3rem); font-weight:700; line-height:1.3}
+  .q-sub{color:var(--muted); font-size:.95rem; margin-top:-8px}
+
+  .choices{display:flex; flex-direction:column; gap:10px}
+  .choice{
+    display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+    font-family:'JetBrains Mono','Consolas',monospace; font-size:clamp(14px,2vh,17px);
+    padding:clamp(10px,1.8vh,16px) 14px; background:#fff; color:var(--text);
+    border:2px solid var(--border); border-radius:10px; cursor:pointer;
+    transition:border-color .15s,background .15s;
+  }
+  .choice:hover:not(:disabled){border-color:var(--accent); background:var(--accent-bg)}
+  .choice:focus-visible,.btn:focus-visible,.link:focus-visible,.dbg-n input:focus-visible{outline:3px solid var(--hl-border); outline-offset:2px}
+  .choice-key{
+    flex:0 0 auto; width:28px; height:28px; display:flex; align-items:center; justify-content:center;
+    background:var(--panel); border:2px solid var(--border); border-radius:6px;
+    color:var(--muted); font:700 .9rem system-ui,sans-serif;
+  }
+  .opt{overflow-wrap:anywhere}
+  .opt .code-kw{color:#1d4ed8; font-weight:700}
+  .opt .code-num{color:#b45309}
+  .choice.correct{background:var(--ok-bg); border-color:var(--ok); color:var(--ok); font-weight:700}
+  .choice.correct .choice-key{background:var(--ok); border-color:var(--ok); color:#fff}
+  .choice.wrong{background:var(--err-bg); border-color:var(--err); color:var(--err); text-decoration:line-through}
+  .choice.wrong .choice-key{background:var(--err); border-color:var(--err); color:#fff}
+  .choice.correct .opt .code-kw,.choice.correct .opt .code-num,
+  .choice.wrong .opt .code-kw,.choice.wrong .opt .code-num{color:inherit}
+  .choice:disabled{cursor:default}
+  .choice:disabled:not(.correct):not(.wrong){opacity:.55}
+
+  .result{
+    min-height:4.4em; padding:10px 14px; border-radius:8px; border:2px solid transparent; font-size:.98rem;
+  }
+  .result:empty{visibility:hidden}
+  .result.ok{background:var(--ok-bg); border-color:var(--ok); color:#14532d}
+  .result.err{background:var(--err-bg); border-color:var(--err); color:#7f1d1d}
+
+  .actions{margin-top:auto; display:flex; gap:10px}
+  .btn{
+    font:inherit; font-weight:700; padding:12px 20px; border-radius:10px;
+    border:2px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer;
+  }
+  .btn:hover:not(:disabled){background:var(--accent-bg)}
+  .btn.primary{background:var(--accent); color:#fff}
+  .btn.primary:hover:not(:disabled){background:var(--accent-dark)}
+  .btn.grow{flex:1}
+  .btn.big{font-size:1.1rem; padding:14px 22px}
+  .btn:disabled{opacity:.4; cursor:not-allowed; border-color:var(--border)}
+  .btn.primary:disabled{background:var(--muted); border-color:var(--muted); color:#fff}
+  .keys{font-size:.8rem; color:var(--muted)}
+
+  /* ---------- debug ---------- */
+  .dbg-n{display:flex; align-items:center; gap:10px; font-weight:700}
+  .dbg-n input{
+    width:96px; font:inherit; font-family:monospace; font-size:1.1rem;
+    padding:6px 10px; border:2px solid var(--border); border-radius:8px;
+  }
+  .dbg-n small{color:var(--muted); font-weight:400}
+  .dbg-msg{
+    flex:1; min-height:5em; display:flex; align-items:center;
+    padding:14px 16px; border-radius:10px; border:2px solid #f59e0b; background:#fef3c7; color:#78350f;
+    font-size:clamp(1.05rem,2.6vh,1.3rem); line-height:1.4;
+  }
+  .dbg-msg.done{background:var(--ok-bg); border-color:var(--ok); color:#14532d}
+  .dbg-count{font-size:.85rem; color:var(--muted); margin-top:-6px}
+  .dbg-foot{display:flex; justify-content:space-between; gap:12px}
+  .link{
+    font:inherit; font-size:.9rem; background:none; border:none; padding:4px 0;
+    color:var(--accent); text-decoration:underline; cursor:pointer;
+  }
+  .link:hover{color:var(--accent-dark)}
+
+  /* ---------- schermi bassi: memoria più compatta ---------- */
+  @media (max-height:700px){
+    .cell{width:28px; height:28px; font-size:14px}
+    .tile{padding:3px 8px}
+    .arr{margin-top:6px}
+    .output-box{min-height:30px}
+    .panel{padding:10px 12px}
+    .left{gap:10px}
+  }
+
+  /* ---------- schermi piccoli: si impila e si scorre ---------- */
+  @media (max-width:900px), (max-height:560px){
+    body{display:block; height:auto; overflow:auto}
+    main{grid-template-columns:1fr}
+    .code-panel{flex:none}
+    pre.code{min-height:300px}
+    .mem-grid{grid-template-columns:1fr 1fr}
+    .tile.out{grid-column:1/-1}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Da decimale a binario <span>in C++</span></h1>
+  <span class="step-counter" id="stepCounter">Passo 1 di 9</span>
+  <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+</header>
+
+<main>
+  <div class="left">
+    <section class="panel code-panel" aria-label="Codice C++">
+      <div class="panel-head">
+        <h2>Codice</h2>
+        <span class="hint">Passa il mouse sulle parole sottolineate</span>
+      </div>
+      <pre class="code" id="codeDisplay"></pre>
+    </section>
+
+    <section class="panel" aria-label="Memoria e output">
+      <div class="panel-head"><h2>Memoria e output</h2></div>
+      <div class="mem-grid">
+        <div class="tile"><span class="var-name">n</span><span class="var-value" id="vN">—</span></div>
+        <div class="tile"><span class="var-name">i</span><span class="var-value" id="vI">—</span></div>
+        <div class="tile out"><span class="var-name">Output</span><div class="output-box" id="outputDisplay"></div></div>
+      </div>
+      <div class="arr">
+        <span class="var-name">b</span>
+        <div class="array-cells" id="arrCells"></div>
+        <small id="arrNote">32 caselle, ne mostro 8</small>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel interact" aria-label="Interazione">
+    <!-- QUIZ -->
+    <div class="view" id="quizView">
+      <div class="q-title" id="qTitle"></div>
+      <div class="q-sub" id="qSub"></div>
+      <div class="choices" id="choices"></div>
+      <div class="result" id="result" aria-live="polite"></div>
+      <div class="actions">
+        <button class="btn primary big grow" id="nextBtn" disabled>Avanti →</button>
+      </div>
+      <div class="keys">Scorciatoie: tasti 1, 2, 3 per rispondere, Invio per andare avanti.</div>
+    </div>
+
+    <!-- DEBUG -->
+    <div class="view" id="debugView" hidden>
+      <div class="q-title">Esegui il programma passo per passo</div>
+      <div class="dbg-n">
+        <label for="dbgInput">Numero n</label>
+        <input id="dbgInput" type="number" min="0" max="255" value="13">
+        <small>da 0 a 255</small>
+      </div>
+      <div class="dbg-msg" id="dbgMsg" aria-live="polite"></div>
+      <div class="dbg-count" id="dbgCount"></div>
+      <div class="actions">
+        <button class="btn" id="backBtn" title="Torna all’istruzione precedente">← Indietro</button>
+        <button class="btn primary big grow" id="fwdBtn" title="Esegui la prossima istruzione">Avanti →</button>
+        <button class="btn" id="playBtn" title="Esegue tutte le istruzioni da solo">Riproduci</button>
+      </div>
+      <div class="dbg-foot">
+        <button class="link" id="restartBtn">Ricomincia da capo</button>
+        <button class="link" id="quizAgainBtn">Rifai il quiz</button>
+      </div>
+      <div class="keys">Scorciatoie: freccia sinistra e destra per muoverti, barra spaziatrice per riprodurre.</div>
+    </div>
+  </section>
+</main>
+
+<div id="tip" role="tooltip" hidden></div>
+
+<script>
+/* ============ TESTI DEI SUGGERIMENTI ============ */
+const TIPS = {
+  int:'Tipo intero: numeri senza virgola.',
+  main:'Funzione principale: da qui parte il programma.',
+  if:'Esegue il blocco solo se la condizione è vera.',
+  while:'Ripete il blocco finché la condizione è vera.',
+  cin:'Legge un valore dalla tastiera.',
+  cout:'Scrive un valore sullo schermo.',
+  return:'Esce dalla funzione main.',
+  '==':'Confronta due valori (non assegna).',
+  '%':'Resto della divisione.',
+  '/=':'Divide e assegna.',
+  '++':'Aumenta di 1, ma solo dopo aver usato il valore attuale.',
+  '--':'Diminuisce di 1, ma solo dopo aver usato il valore attuale.',
+  '>>':'Prende il valore dalla tastiera e lo mette nella variabile a destra.',
+  '<<':'Manda il valore allo schermo.',
+};
+
+/* ============ PROGRAMMA COMPLETO (indici usati dal debug) ============ */
+const PROGRAM = [
+  'int main() {',                                  // 0
+  '  int n;',                                      // 1
+  '  int i = 0;',                                  // 2
+  '  int b[32];',                                  // 3
+  '  cin >> n;',                                   // 4
+  '  if (n == 0) { cout << 0; return 0; }',        // 5
+  '  while (n) {',                                 // 6
+  '    b[i++] = n % 2;',                           // 7
+  '    n /= 2;',                                   // 8
+  '  }',                                           // 9
+  '  while (i--) cout << b[i];',                   // 10
+  '}'                                              // 11
+];
+
+/* ============ PASSI DEL QUIZ ============ */
+const STEPS = [
+  { title:'Come inizia un programma C++?',
+    sub:'Scegli la riga che apre main.',
+    options:['int main() {','void start() {','begin {'], correct:0,
+    lines:[PROGRAM[0]],
+    explain:'Ogni programma C++ parte da main. Le graffe { } racchiudono il suo corpo.',
+    state:{n:null,i:null,b:null,output:''} },
+
+  { title:'Dichiara la variabile per il numero.',
+    sub:'Quale tipo serve per un numero intero?',
+    options:['int n;','float n;','n;'], correct:0,
+    lines:[PROGRAM[1]],
+    explain:'int = numero intero. n è ancora vuota: la riempiamo tra poco.',
+    state:{n:'?',i:null,b:null,output:''} },
+
+  { title:'Serve un contatore per l’array.',
+    sub:'Quante cifre binarie abbiamo già salvato?',
+    options:['int i = 0;','int i = 1;','int i;'], correct:0,
+    lines:[PROGRAM[2]],
+    explain:'i parte da 0: punta alla prima casella libera di b.',
+    state:{n:'?',i:0,b:null,output:''} },
+
+  { title:'Dichiara l’array per le cifre binarie.',
+    sub:'Servono al massimo 32 celle per un int.',
+    options:['int b[32];','int b;','int b[2];'], correct:0,
+    lines:[PROGRAM[3]],
+    explain:'b è una fila di 32 caselle: ognuna conterrà 0 oppure 1.',
+    state:{n:'?',i:0,b:[],output:''} },
+
+  { title:'Leggi il numero dalla tastiera.',
+    sub:'L’operatore >> porta il valore dentro n.',
+    options:['cin >> n;','cin << n;','input(n);'], correct:0,
+    lines:[PROGRAM[4]],
+    explain:'Esempio: se digiti 13, n diventa 13.',
+    state:{n:13,i:0,b:[],output:''} },
+
+  { title:'Caso speciale: se n è 0, stampa 0 ed esci.',
+    sub:'La doppia == confronta, non assegna.',
+    options:['if (n == 0) { cout << 0; return 0; }','if (n = 0) { }','if (n > 0) { }'], correct:0,
+    lines:[PROGRAM[5]],
+    explain:'return 0; esce dal main: il programma finisce qui solo se n è 0.',
+    state:{n:13,i:0,b:[],output:''} },
+
+  { title:'Il cuore: estrai le cifre binarie.',
+    sub:'Finché n > 0, salva il resto (0 o 1) e dimezza n.',
+    options:['while (n) { b[i++] = n % 2; n /= 2; }','for (n) { }','while (n == 0) { }'], correct:0,
+    lines:[PROGRAM[6],PROGRAM[7],PROGRAM[8],PROGRAM[9]],
+    explain:'n % 2 è il resto (0 o 1). i++ passa alla casella dopo. n /= 2 dimezza n.',
+    state:{n:0,i:4,b:[1,0,1,1],output:''} },
+
+  { title:'Le cifre sono al contrario: stampale al verso giusto.',
+    sub:'i-- scende dall’ultima cifra alla prima.',
+    options:['while (i--) cout << b[i];','while (i++) cout << b[i];','cout << b;'], correct:0,
+    lines:[PROGRAM[10]],
+    explain:'i-- usa i e poi lo diminuisce: stampa da b[i-1] fino a b[0]. A fine ciclo i vale -1.',
+    state:{n:0,i:-1,b:[1,0,1,1],output:'1101'} },
+
+  { title:'Chiudi il main.',
+    sub:'La graffa chiusa termina il programma.',
+    options:['}','return 0; }','end'], correct:0,
+    lines:[PROGRAM[11]],
+    explain:'Programma completo! Ora eseguilo passo per passo.',
+    state:{n:0,i:-1,b:[1,0,1,1],output:'1101'} },
+];
+
+/* ============ DOM ============ */
+const $ = id => document.getElementById(id);
+const codeEl = $('codeDisplay'), outEl = $('outputDisplay'), arrEl = $('arrCells'), arrNote = $('arrNote');
+const vN = $('vN'), vI = $('vI');
+const stepCounter = $('stepCounter'), progressFill = $('progressFill');
+const quizView = $('quizView'), debugView = $('debugView');
+const qTitle = $('qTitle'), qSub = $('qSub'), choicesEl = $('choices'), resultEl = $('result'), nextBtn = $('nextBtn');
+const dbgInput = $('dbgInput'), dbgMsg = $('dbgMsg'), dbgCount = $('dbgCount');
+const backBtn = $('backBtn'), fwdBtn = $('fwdBtn'), playBtn = $('playBtn');
+const tipEl = $('tip');
+
+/* ============ STATO ============ */
+const initialState = () => ({ n:null, i:null, b:null, output:'' });
+const clone = o => JSON.parse(JSON.stringify(o));
+let mode = 'quiz';
+let step = 0;
+let revealed = [];
+let state = initialState();
+
+/* ============ COLORAZIONE (un solo passaggio) ============ */
+function escapeAttr(s){
+  return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function colorize(text, interactive = true){
+  const s = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const pattern = /\b(int|main|if|while|return|cout|cin)\b|\b(\d+)\b|(&lt;&lt;|&gt;&gt;|==|\/=|\+\+|--|%)/g;
+  return s.replace(pattern, (full, kw, num, op) => {
+    if (kw){
+      return interactive
+        ? `<span class="code-kw help-token" data-tip="${escapeAttr(TIPS[kw] || '')}">${kw}</span>`
+        : `<span class="code-kw">${kw}</span>`;
+    }
+    if (num) return `<span class="code-num">${num}</span>`;
+    const key = op === '&lt;&lt;' ? '<<' : op === '&gt;&gt;' ? '>>' : op;
+    if (!interactive || !TIPS[key]) return op;
+    return `<span class="help-token" data-tip="${escapeAttr(TIPS[key])}">${op}</span>`;
+  });
+}
+
+/* ============ SUGGERIMENTI (hover o tocco) ============ */
+function showTip(el){
+  tipEl.textContent = el.dataset.tip;
+  tipEl.hidden = false;
+  const r = el.getBoundingClientRect();
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  const x = Math.min(Math.max(8, r.left + r.width/2 - w/2), window.innerWidth - w - 8);
+  let y = r.top - h - 8;
+  if (y < 8) y = r.bottom + 8;
+  tipEl.style.left = x + 'px';
+  tipEl.style.top  = y + 'px';
+}
+function hideTip(){ tipEl.hidden = true; }
+codeEl.addEventListener('mouseover', e => { const t = e.target.closest('.help-token'); if (t) showTip(t); });
+codeEl.addEventListener('mouseout',  e => { if (e.target.closest('.help-token')) hideTip(); });
+codeEl.addEventListener('click', e => {
+  const t = e.target.closest('.help-token');
+  if (t){ e.stopPropagation(); showTip(t); }
+});
+document.addEventListener('click', hideTip);
+
+/* ============ RENDER CODICE ============ */
+function renderCode({ hl = null, placeholder = null } = {}){
+  hideTip();
+  let html = revealed.map((line, idx) => {
+    const cur = hl && idx >= hl[0] && idx < hl[1];
+    return `<span class="line${cur ? ' current' : ''}">${colorize(line) || '&nbsp;'}</span>`;
+  }).join('');
+  if (placeholder) html += `<span class="line placeholder">${placeholder}</span>`;
+  codeEl.innerHTML = html;
+}
+
+/* ============ RENDER MEMORIA ============ */
+function setVal(el, text, empty, changed){
+  el.textContent = text;
+  el.classList.toggle('empty', empty);
+  el.classList.remove('updated');
+  if (changed){ void el.offsetWidth; el.classList.add('updated'); }
+}
+function renderVars(s, p){
+  setVal(vN, s.n === null ? '—' : s.n, s.n === null || s.n === '?', !!p && p.n !== s.n);
+  setVal(vI, s.i === null ? '—' : s.i, s.i === null, !!p && p.i !== s.i);
+
+  if (s.b === null){
+    arrEl.innerHTML = '<span class="arr-none">non ancora dichiarato</span>';
+    arrNote.hidden = true;
+  } else {
+    const pb = p && p.b ? p.b : [];
+    let html = '';
+    for (let k = 0; k < 8; k++){
+      const v = s.b[k];
+      const cell = v !== undefined
+        ? `<div class="cell filled${pb[k] !== v ? ' updated' : ''}">${v}</div>`
+        : '<div class="cell"></div>';
+      html += `<div class="cell-wrap">${cell}<div class="cell-idx">${k}</div></div>`;
+    }
+    arrEl.innerHTML = html;
+    arrNote.hidden = false;
+  }
+  outEl.textContent = s.output || '';
+}
+
+/* ============ QUIZ ============ */
+function shuffled(n){
+  const a = [...Array(n).keys()];
+  for (let k = n - 1; k > 0; k--){
+    const j = Math.floor(Math.random() * (k + 1));
+    [a[k], a[j]] = [a[j], a[k]];
+  }
+  return a;
+}
+function showResult(kind, strong, text){
+  const b = document.createElement('strong');
+  b.textContent = strong;
+  resultEl.className = 'result ' + kind;
+  resultEl.replaceChildren(b, document.createTextNode(' ' + text));
+}
+
+function renderQuiz(){
+  mode = 'quiz';
+  quizView.hidden = false;
+  debugView.hidden = true;
+  const st = STEPS[step];
+  stepCounter.textContent = `Passo ${step + 1} di ${STEPS.length}`;
+  progressFill.style.width = (step / STEPS.length * 100) + '%';
+
+  const n = st.lines.length;
+  renderCode({ placeholder: n === 1 ? '  // ← scegli la risposta' : `  // ← qui vanno ${n} righe` });
+  renderVars(state, null);
+
+  qTitle.textContent = st.title;
+  qSub.textContent = st.sub;
+  resultEl.className = 'result';
+  resultEl.replaceChildren();
+  nextBtn.disabled = true;
+  nextBtn.textContent = step < STEPS.length - 1 ? 'Avanti →' : 'Esegui il programma →';
+
+  choicesEl.replaceChildren();
+  shuffled(st.options.length).forEach((optIdx, pos) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice';
+    btn.innerHTML = `<span class="choice-key">${pos + 1}</span><span class="opt">${colorize(st.options[optIdx], false)}</span>`;
+    btn.onclick = () => handleAnswer(optIdx, btn);
+    choicesEl.appendChild(btn);
+  });
+}
+
+function handleAnswer(optIdx, btn){
+  const st = STEPS[step];
+  if (optIdx === st.correct){
+    btn.classList.add('correct');
+    choicesEl.querySelectorAll('.choice').forEach(b => b.disabled = true);
+    showResult('ok', 'Giusto.', st.explain);
+
+    const from = revealed.length;
+    st.lines.forEach(l => revealed.push(l));
+    renderCode({ hl:[from, revealed.length] });
+
+    const prev = state;
+    state = clone(st.state);
+    renderVars(state, prev);
+
+    progressFill.style.width = ((step + 1) / STEPS.length * 100) + '%';
+    nextBtn.disabled = false;
+    nextBtn.focus();
+  } else {
+    btn.classList.add('wrong');
+    btn.disabled = true;
+    showResult('err', 'Non è questa.', 'Riprova con un’altra riga.');
+  }
+}
+
+nextBtn.onclick = () => {
+  if (nextBtn.disabled) return;
+  step++;
+  if (step >= STEPS.length) enterDebug();
+  else renderQuiz();
+};
+
+/* ============ DEBUG: traccia precalcolata, si può andare avanti e indietro ============ */
+let AUTO_MS = 1000;
+let frames = [], idx = 0, shown = null, autoTimer = null;
+
+/* ogni frame = stato DOPO l'istruzione evidenziata */
+function buildTrace(n0){
+  const F = [];
+  let n = '?', i = 0, b = [], out = '';
+  const push = (line, msg) => F.push({ line, n, i, b:[...b], out, msg });
+
+  push(0, 'Parte main. n è ancora vuota (?), i vale 0.');
+  n = n0;
+  push(4, `Leggo da tastiera: n = ${n0}.`);
+
+  if (n0 === 0){
+    out = '0';
+    push(5, 'n è 0: stampo 0 ed esco. Risultato: 0.');
+    return F;
+  }
+  push(5, `n = ${n0}, non è 0: salto l’if.`);
+
+  while (n > 0){
+    const old = n, r = n % 2;
+    b[i] = r; i++;
+    push(7, `${old} % 2 = ${r}: salvo ${r} in b[${i - 1}], poi i diventa ${i}.`);
+    n = Math.floor(n / 2);
+    push(8, n > 0
+      ? `${old} / 2 = ${n}: n è ancora maggiore di 0, si ripete.`
+      : `${old} / 2 = 0: n è 0, esco dal while.`);
+  }
+
+  while (i > 0){
+    i--;
+    out += b[i];
+    push(10, `Stampo b[${i}] = ${b[i]}. Output: ${out}`);
+  }
+  i = -1;
+  push(10, `i vale 0: il ciclo finisce (i-- lo porta a -1). Risultato: ${n0} = ${out} in binario.`);
+  return F;
+}
+
+function showFrame(){
+  const f = frames[idx];
+  const s = { n:f.n, i:f.i, b:f.b, output:f.out };
+  renderCode({ hl:[f.line, f.line + 1] });
+  renderVars(s, shown);
+  shown = s;
+
+  dbgMsg.textContent = f.msg;
+  dbgMsg.classList.toggle('done', idx === frames.length - 1);
+  dbgCount.textContent = `Istruzione ${idx + 1} di ${frames.length}`;
+  progressFill.style.width = (idx / (frames.length - 1) * 100) + '%';
+  backBtn.disabled = idx === 0;
+  fwdBtn.disabled  = idx === frames.length - 1;
+}
+
+function stopAuto(){
+  if (autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+  playBtn.textContent = 'Riproduci';
+}
+function startAuto(){
+  if (idx >= frames.length - 1){ idx = 0; showFrame(); }
+  playBtn.textContent = 'Pausa';
+  autoTimer = setInterval(() => {
+    if (idx < frames.length - 1){ idx++; showFrame(); }
+    if (idx >= frames.length - 1) stopAuto();
+  }, AUTO_MS);
+}
+
+function restart(n){
+  stopAuto();
+  frames = buildTrace(n);
+  idx = 0;
+  shown = null;
+  showFrame();
+}
+
+function enterDebug(){
+  mode = 'debug';
+  quizView.hidden = true;
+  debugView.hidden = false;
+  revealed = [...PROGRAM];
+  stepCounter.textContent = 'Esecuzione';
+  dbgInput.value = 13;
+  restart(13);
+  fwdBtn.focus();
+}
+
+function backToQuiz(){
+  stopAuto();
+  step = 0;
+  revealed = [];
+  state = initialState();
+  renderQuiz();
+}
+
+fwdBtn.onclick  = () => { stopAuto(); if (idx < frames.length - 1){ idx++; showFrame(); } };
+backBtn.onclick = () => { stopAuto(); if (idx > 0){ idx--; showFrame(); } };
+playBtn.onclick = () => { if (autoTimer) stopAuto(); else startAuto(); };
+$('restartBtn').onclick   = () => restart(clampN(dbgInput.value));
+$('quizAgainBtn').onclick = backToQuiz;
+
+function clampN(v){
+  const n = parseInt(v, 10);
+  return isNaN(n) ? 0 : Math.max(0, Math.min(255, n));
+}
+dbgInput.addEventListener('input', () => {
+  if (dbgInput.value === '') return;
+  const n = clampN(dbgInput.value);
+  if (String(n) !== dbgInput.value) dbgInput.value = n;
+  restart(n);
+});
+
+/* ============ TASTIERA ============ */
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const tag = e.target.tagName;
+  if (e.key === 'Escape'){ hideTip(); return; }
+
+  if (mode === 'quiz'){
+    if (e.key === '1' || e.key === '2' || e.key === '3'){
+      const b = choicesEl.children[Number(e.key) - 1];
+      if (b && !b.disabled) b.click();
+    } else if (e.key === 'Enter' && tag !== 'BUTTON' && !nextBtn.disabled){
+      nextBtn.click();
+    }
+  } else {
+    if (tag === 'INPUT') return;
+    if (e.key === 'ArrowRight'){ e.preventDefault(); fwdBtn.click(); }
+    else if (e.key === 'ArrowLeft'){ e.preventDefault(); backBtn.click(); }
+    else if (e.key === ' ' && tag !== 'BUTTON'){ e.preventDefault(); playBtn.click(); }
+  }
+});
+
+/* ============ AVVIO ============ */
+renderQuiz();
+</script>
+</body>
+</html>
